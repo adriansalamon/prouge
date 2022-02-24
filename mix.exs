@@ -1,9 +1,9 @@
-defmodule Prouge.MixProject do
+defmodule Prougep.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :prouge,
+      app: :prougep,
       version: "0.1.0",
       elixir: "~> 1.13",
       start_permanent: Mix.env() == :prod,

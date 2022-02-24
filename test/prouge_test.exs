@@ -1,8 +1,8 @@
-defmodule ProugeTest do
+defmodule ProugepTest do
   use ExUnit.Case
-  doctest Prouge
+  doctest Prougep
 
   test "greets the world" do
-    assert Prouge.hello() == :world
+    assert Prougep.hello() == :world
   end
 end
