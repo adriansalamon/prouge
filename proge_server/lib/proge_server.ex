@@ -1,6 +1,6 @@
-defmodule Prougep do
+defmodule ProgeServer do
   @moduledoc """
-  Documentation for `Prougep`.
+  Documentation for `ProgeServer`.
   """
 
   @doc """
@@ -8,7 +8,7 @@ defmodule Prougep do
 
   ## Examples
 
-      iex> Prougep.hello()
+      iex> ProgeServer.hello()
       :world
 
   """
