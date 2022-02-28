@@ -8,12 +8,12 @@ defmodule ProugeServer.Game do
     GenServer.start_link(__MODULE__, start_state, name: __MODULE__)
   end
 
-  def add_player(player_id) do
-    GenServer.cast __MODULE__, {:add_player, player_id}
+  def add_player(pid) do
+    GenServer.cast __MODULE__, {:add_player, pid}
   end
 
-  def move_player(%{player_id: id, dir: dir}) do
-    GenServer.cast __MODULE__, {:move_player, id, dir}
+  def move_player(pid, dir) do
+    GenServer.cast __MODULE__, {:move_player, pid, dir}
   end
 
   def get_state() do
@@ -25,11 +25,11 @@ defmodule ProugeServer.Game do
   end
 
   defmodule Player do
-    defstruct id: 0, x: 0, y: 0
+    defstruct pid: 0, x: 0, y: 0
   end
 
   defmodule State do
-    defstruct players: [], clients: []
+    defstruct players: []
   end
 
   ## Genserver implementation
@@ -39,14 +39,16 @@ defmodule ProugeServer.Game do
   end
 
   @impl true
-  def handle_cast({:move_player, id, dir}, state) do
-    {:noreply, %{state | players: Enum.map(state.players, fn x -> move_player(id, dir, x) end)}}
+  def handle_cast({:move_player, pid, dir}, state) do
+    {:noreply, %{state | players: Enum.map(state.players, fn x -> move_player(pid, dir, x) end)}}
   end
 
   @impl true
-  def handle_cast({:add_player, id}, state) do
-    newPlayer = %Player{id: id}
-    {:noreply, Map.update(state, :players, [newPlayer], fn rest -> [ newPlayer | rest ] end)}
+  def handle_cast({:add_player, pid}, state) do
+    newPlayer = %Player{pid: pid}
+    state = Map.update(state, :players, [newPlayer], fn rest -> [ newPlayer | rest ] end)
+    for player <- state.players do ProugeServer.Client.send_game_state(player.pid, state) end
+    {:noreply, state}
   end
 
   @impl true
@@ -60,15 +62,15 @@ defmodule ProugeServer.Game do
   end
 
 
-  defp move_player(player_id, dir, %Player{id: id, x: x, y: y}) do
+  defp move_player(pid_to_move, dir, %Player{pid: pid, x: x, y: y} = player) do
     cond do
-      player_id == id -> case dir do
-        :left -> %Player{id: id, x: x-1, y: y}
-        :right -> %Player{id: id, x: x+1, y: y}
-        :up -> %Player{id: id, x: x, y: y-1}
-        :down -> %Player{id: id, x: x, y: y+1}
+      pid_to_move == pid -> case dir do
+        :left -> %Player{ player | x: x-1}
+        :right -> %Player{ player | x: x+1}
+        :up -> %Player{ player | y: y-1}
+        :down -> %Player{ player | y: y+1}
       end
-      true ->  %Player{id: id, x: x, y: y}
+      true ->  player
     end
   end
 

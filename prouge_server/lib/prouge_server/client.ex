@@ -3,25 +3,21 @@ defmodule ProugeServer.Client do
   require Logger
   alias ProugeServer.Game, as: Game
 
-  @initial_state %{socket: nil, pid: nil, user_id: nil}
+  @initial_state %{socket: nil, pid: nil}
 
   def start_link(socket) do
-    Logger.info "Starting Client..."
+    Logger.info "Starting Client on socket #{inspect(socket)}"
     GenServer.start_link(__MODULE__, socket)
+  end
+
+  def send_game_state(pid, gamestate) do
+    GenServer.cast(pid, {:send_game_state, inspect(gamestate)})
   end
 
   @impl true
   def init(socket) do
-    :gen_tcp.send(socket, "Please provide user_id: \n")
+    Game.add_player(self())
     {:ok, %{@initial_state | socket: socket, pid: self()}}
-  end
-
-  @impl true
-  def handle_info({:tcp, socket, message}, %{user_id: nil} = state) do
-    :inet.setopts(socket, active: :once)
-    id = message |> String.trim() |> String.to_integer()
-    Game.add_player(id)
-    {:noreply, state}
   end
 
   @impl true
@@ -35,6 +31,14 @@ defmodule ProugeServer.Client do
   def handle_info({:tcp_closed, socket}, state) do
     Logger.info "Closed TCP connection with #{inspect(socket)}"
     Process.exit(self(), :shutdown)
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_cast({:send_game_state, gamestate}, %{socket: socket} = state) do
+    Logger.info "Sending #{inspect(gamestate)} to #{inspect(state.socket)}"
+
+    :gen_tcp.send(socket, gamestate <> "\n")
     {:noreply, state}
   end
 end
