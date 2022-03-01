@@ -7,11 +7,10 @@ defmodule ProugeServer.Application do
 
   @impl true
   def start(_type, _args) do
-
     children = [
-      { DynamicSupervisor, strategy: :one_for_one, name: ProugeServer.DynamicSupervisor},
-      { ProugeServer.TCPServer, 4040 },
-      { ProugeServer.Game, %{}}
+      {DynamicSupervisor, strategy: :one_for_one, name: ProugeServer.DynamicSupervisor},
+      {ProugeServer.TCPServer, 4040},
+      {ProugeServer.Game, %{}}
       # Starts a worker by calling: ProugeServer.Worker.start_link(arg)
       # {ProugeServer.Worker, arg}
     ]

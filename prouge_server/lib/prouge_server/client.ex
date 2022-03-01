@@ -6,7 +6,7 @@ defmodule ProugeServer.Client do
   @initial_state %{socket: nil, pid: nil}
 
   def start_link(socket) do
-    Logger.info "Starting Client on socket #{inspect(socket)}"
+    Logger.info("Starting Client on socket #{inspect(socket)}")
     GenServer.start_link(__MODULE__, socket)
   end
 
@@ -23,20 +23,20 @@ defmodule ProugeServer.Client do
   @impl true
   def handle_info({:tcp, socket, message}, state) do
     :inet.setopts(socket, active: :once)
-    Logger.info "Revieved packet #{inspect(message)}"
+    Logger.info("Revieved packet #{inspect(message)}")
     {:noreply, state}
   end
 
   @impl true
   def handle_info({:tcp_closed, socket}, state) do
-    Logger.info "Closed TCP connection with #{inspect(socket)}"
+    Logger.info("Closed TCP connection with #{inspect(socket)}")
     Process.exit(self(), :shutdown)
     {:noreply, state}
   end
 
   @impl true
   def handle_cast({:send_game_state, gamestate}, %{socket: socket} = state) do
-    Logger.info "Sending #{inspect(gamestate)} to #{inspect(state.socket)}"
+    Logger.info("Sending #{inspect(gamestate)} to #{inspect(state.socket)}")
 
     :gen_tcp.send(socket, gamestate <> "\n")
     {:noreply, state}

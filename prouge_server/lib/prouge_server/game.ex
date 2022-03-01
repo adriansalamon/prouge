@@ -3,25 +3,26 @@ defmodule ProugeServer.Game do
   use GenServer
 
   ## External API
+  #
 
   def start_link(start_state) do
     GenServer.start_link(__MODULE__, start_state, name: __MODULE__)
   end
 
   def add_player(pid) do
-    GenServer.cast __MODULE__, {:add_player, pid}
+    GenServer.cast(__MODULE__, {:add_player, pid})
   end
 
   def move_player(pid, dir) do
-    GenServer.cast __MODULE__, {:move_player, pid, dir}
+    GenServer.cast(__MODULE__, {:move_player, pid, dir})
   end
 
   def get_state() do
-    GenServer.call __MODULE__, :get_state
+    GenServer.call(__MODULE__, :get_state)
   end
 
   def set_state(state) do
-    GenServer.cast __MODULE__, {:set_state, state}
+    GenServer.cast(__MODULE__, {:set_state, state})
   end
 
   defmodule Player do
@@ -33,6 +34,7 @@ defmodule ProugeServer.Game do
   end
 
   ## Genserver implementation
+  #
   @impl true
   def init(state) do
     {:ok, state}
@@ -46,8 +48,12 @@ defmodule ProugeServer.Game do
   @impl true
   def handle_cast({:add_player, pid}, state) do
     newPlayer = %Player{pid: pid}
-    state = Map.update(state, :players, [newPlayer], fn rest -> [ newPlayer | rest ] end)
-    for player <- state.players do ProugeServer.Client.send_game_state(player.pid, state) end
+    state = Map.update(state, :players, [newPlayer], fn rest -> [newPlayer | rest] end)
+
+    for player <- state.players do
+      ProugeServer.Client.send_game_state(player.pid, state)
+    end
+
     {:noreply, state}
   end
 
@@ -61,17 +67,20 @@ defmodule ProugeServer.Game do
     {:reply, state, state}
   end
 
-
+  ## Game logic
+  #
   defp move_player(pid_to_move, dir, %Player{pid: pid, x: x, y: y} = player) do
     cond do
-      pid_to_move == pid -> case dir do
-        :left -> %Player{ player | x: x-1}
-        :right -> %Player{ player | x: x+1}
-        :up -> %Player{ player | y: y-1}
-        :down -> %Player{ player | y: y+1}
-      end
-      true ->  player
+      pid_to_move == pid ->
+        case dir do
+          :left -> %Player{player | x: x - 1}
+          :right -> %Player{player | x: x + 1}
+          :up -> %Player{player | y: y - 1}
+          :down -> %Player{player | y: y + 1}
+        end
+
+      true ->
+        player
     end
   end
-
 end
