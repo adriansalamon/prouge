@@ -42,9 +42,11 @@ defmodule ProugeClient.TCPClient do
     {:noreply, state}
   end
 
+  # Recieve tcp game state
   @impl true
   def handle_info({:tcp, _socket, message}, %{client_pid: pid} = state) do
-    send(pid, {:event, {:new_game_state, message}})
+    {:ok, decoded} = Jason.decode(message)
+    send(pid, {:event, {:new_game_state, decoded}})
     {:noreply, state}
   end
 

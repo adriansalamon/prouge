@@ -10,11 +10,13 @@ defmodule ProugeClient.App do
   @right key(:arrow_right)
   @arrows [@up, @down, @left, @right]
 
-  def init(_context) do
+  def init(%{window: window}) do
     TCPClient.set_client(self())
     TCPClient.connect('localhost', 6969)
     %{
-      game_state: %{}
+      game_state: %{},
+      height: window.height - 2,
+      width: window.width - 2
     }
   end
 
@@ -30,9 +32,7 @@ defmodule ProugeClient.App do
   end
 
   def render(model) do
-    view do
-      label(content: "Gamesstate is #{inspect(model.game_state)}")
-    end
+    ProugeClient.GameRenderer.render(model)
   end
 
   defp to_direction(key) do
