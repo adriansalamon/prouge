@@ -11,7 +11,7 @@ defmodule ProugeServer.TCPServer do
   def accept(port) do
     Process.register(self(), ProugeServer.TCPServer)
 
-    {:ok, socket} = :gen_tcp.listen(port, [ :binary, packet: :line, active: :once, reuseaddr: true])
+    {:ok, socket} = :gen_tcp.listen(port, [ :binary, packet: 4, active: :once, reuseaddr: true])
 
     Logger.info("Accepting connections on port #{port}")
     loop_acceptor(socket)
