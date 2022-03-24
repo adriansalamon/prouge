@@ -1,10 +1,11 @@
 defmodule ProugeServer.Game do
+  alias ProugeServer.Map, as: Map
   use GenServer
   require Logger
 
   defmodule GameState do
     @derive Jason.Encoder
-    defstruct players: []
+    defstruct players: [], map: %Map{}
   end
 
   defmodule Player do
@@ -12,8 +13,8 @@ defmodule ProugeServer.Game do
     defstruct pid: nil, x: 0, y: 0
   end
 
-  def start_link(_opts) do
-    GenServer.start_link(__MODULE__, %GameState{}, name: ProugeServer.Game)
+  def start_link(opts) do
+    GenServer.start_link(__MODULE__, opts, name: ProugeServer.Game)
   end
 
   ## Public api
@@ -40,14 +41,15 @@ defmodule ProugeServer.Game do
 
   ## Genserver implementation
   @impl true
-  def init(initial_state) do
-    {:ok, initial_state}
+  def init(_opts) do
+    {:ok, %GameState{map: Map.generate_map()}}
   end
 
   # Add a new player to the game
   @impl true
   def handle_cast({:add_player, pid}, %{players: players} = state) do
-    newState = %{state | players: [%Player{pid: pid} | players]}
+
+    newState = %{state | players: [%Player{pid: pid, x: 21, y: 16} | players]}
     {:noreply, newState}
   end
 
@@ -74,16 +76,22 @@ defmodule ProugeServer.Game do
   end
 
   ## Game logic
-  defp try_move_players(%{players: players} = state, to_move, direction) do
+  defp try_move_players(%{players: players, map: map} = state, to_move, direction) do
     newPositions =
       Enum.map(players, fn p ->
         cond do
           p.pid == to_move ->
-            case direction do
+            new_p = case direction do
               "right" -> %{p | x: p.x + 1}
               "left" -> %{p | x: p.x - 1}
               "up" -> %{p | y: p.y - 1}
               "down" -> %{p | y: p.y + 1}
+            end
+            colliding = Map.colliding?(map, new_p.x, new_p.y)
+            Logger.debug("colliding: #{inspect(colliding)}")
+            case colliding do
+              true -> p
+              false -> new_p
             end
           true -> p
         end
@@ -91,7 +99,4 @@ defmodule ProugeServer.Game do
 
     %{state | players: newPositions}
   end
-
-
-
 end

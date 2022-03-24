@@ -13,7 +13,7 @@ defmodule ProugeServerTest do
     expected = %GameState{players: [%Player{pid: self()}]}
 
     state = :sys.get_state(ProugeServer.Game)
-    assert state == expected
+    assert state.players == expected.players
   end
 
   test "move players work" do
@@ -24,12 +24,12 @@ defmodule ProugeServerTest do
     Game.add_player(pid1)
     Game.add_player(pid2)
 
-    Game.move_player(pid1, :right)
-    Game.move_player(pid2, :down)
+    Game.handle_command(pid1, %{"command" => %{"move" => "right"}})
+    Game.handle_command(pid2, %{"command" => %{"move" => "down"}})
 
     expected = %GameState{players: [%Player{pid: pid2, x: 0, y: 1}, %Player{pid: pid1, x: 1, y: 0}]}
 
     state = :sys.get_state(ProugeServer.Game)
-    assert state == expected
+    assert state.players == expected.players
   end
 end

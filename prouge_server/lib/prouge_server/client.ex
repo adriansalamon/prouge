@@ -43,6 +43,8 @@ defmodule ProugeServer.Client do
 
   @impl true
   def handle_cast({:send_state, game_state}, %{socket: socket} = state) do
+    encoded = Jason.encode!(game_state)
+    Logger.debug("Sending: #{inspect(encoded)} over #{inspect(socket)}")
     :gen_tcp.send(socket, Jason.encode!(game_state))
     {:noreply, state}
   end
