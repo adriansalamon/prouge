@@ -16,9 +16,9 @@ defmodule ProugeClient.GameRenderer do
   defp render_game(%{game_state: game} = model) when game != %{} do
     cells = []
       |> draw_players(game)
+      |> draw_rooms(game)
       |> draw_h_tunnels(game)
       |> draw_v_tunnels(game)
-      |> draw_rooms(game)
 
     canvas(height: model.height, width: model.width) do
       cells

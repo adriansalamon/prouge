@@ -47,9 +47,11 @@ defmodule ProugeServer.Game do
 
   # Add a new player to the game
   @impl true
-  def handle_cast({:add_player, pid}, %{players: players} = state) do
+  def handle_cast({:add_player, pid}, %{players: players, map: %{rooms: rooms}} = state) do
 
-    newState = %{state | players: [%Player{pid: pid, x: 21, y: 16} | players]}
+    %{x: x, y: y} = Enum.at(rooms, 0) |> Map.Room.center()
+
+    newState = %{state | players: [%Player{pid: pid, x: x, y: y} | players]}
     {:noreply, newState}
   end
 
@@ -87,7 +89,7 @@ defmodule ProugeServer.Game do
               "up" -> %{p | y: p.y - 1}
               "down" -> %{p | y: p.y + 1}
             end
-            colliding = Map.colliding?(map, new_p.x, new_p.y)
+            colliding = Map.colliding?(map, players, new_p)
             Logger.debug("colliding: #{inspect(colliding)}")
             case colliding do
               true -> p
