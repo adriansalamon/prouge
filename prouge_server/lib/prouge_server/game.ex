@@ -1,11 +1,11 @@
 defmodule ProugeServer.Game do
-  alias ProugeServer.Map, as: Map
+  alias ProugeServer.GameMap, as: GameMap
   use GenServer
   require Logger
 
   defmodule GameState do
     @derive Jason.Encoder
-    defstruct players: [], map: %Map{}
+    defstruct players: [], map: %GameMap{}
   end
 
   defmodule Player do
@@ -42,14 +42,14 @@ defmodule ProugeServer.Game do
   ## Genserver implementation
   @impl true
   def init(_opts) do
-    {:ok, %GameState{map: Map.generate_map()}}
+    {:ok, %GameState{map: GameMap.generate_map()}}
   end
 
   # Add a new player to the game
   @impl true
   def handle_cast({:add_player, pid}, %{players: players, map: %{rooms: rooms}} = state) do
 
-    %{x: x, y: y} = Enum.at(rooms, 0) |> Map.Room.center()
+    %{x: x, y: y} = Enum.at(rooms, 0) |> GameMap.Room.center()
 
     newState = %{state | players: [%Player{pid: pid, x: x, y: y} | players]}
     {:noreply, newState}
@@ -89,7 +89,7 @@ defmodule ProugeServer.Game do
               "up" -> %{p | y: p.y - 1}
               "down" -> %{p | y: p.y + 1}
             end
-            colliding = Map.colliding?(map, players, new_p)
+            colliding = GameMap.colliding?(map, players, new_p)
             Logger.debug("colliding: #{inspect(colliding)}")
             case colliding do
               true -> p
