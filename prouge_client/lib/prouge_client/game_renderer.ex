@@ -40,10 +40,9 @@ defmodule ProugeClient.GameRenderer do
   end
 
   defp draw_rooms(cells, %{"map" => %{"rooms" => rooms}}) do
-    walls = Enum.map(rooms, &room_borders/1)
+    walls = Enum.map(rooms, &room_cells/1)
     [walls | cells]
   end
-
 
   defp draw_h_tunnels(cells, %{"map" => %{"h_tunnels" => tunnels}}) do
     tunnel_cells =  tunnels |> Enum.map(fn %{"x1" => x1, "x2" => x2, "y" => y} ->
@@ -59,7 +58,7 @@ defmodule ProugeClient.GameRenderer do
     [tunnel_cells | cells]
   end
 
-  defp room_borders(%{"x1" => x1, "x2" => x2, "y1" => y1, "y2" => y2}) do
+  defp room_cells(%{"x1" => x1, "x2" => x2, "y1" => y1, "y2" => y2, "items" => items}) do
     a = for x <- x1..x2, do: canvas_cell(x: x, y: y1, char: "-")
     b = for x <- x1..x2, do: canvas_cell(x: x, y: y2, char: "-")
     c = for y <- (y1 + 1)..(y2 - 1), do: canvas_cell(x: x1, y: y, char: "|")
@@ -67,6 +66,8 @@ defmodule ProugeClient.GameRenderer do
 
     insides = for x <- (x1+1)..(x2-1), y <- (y1+1)..(y2-1), do: canvas_cell(x: x, y: y, char: ".")
 
-    [insides, a, b, c | d]
+    items = Enum.map(items, fn %{"x" => x, "y" => y} -> canvas_cell(x: x, y: y, char: "X") end)
+
+    [insides, a, b, c, items | d]
   end
 end

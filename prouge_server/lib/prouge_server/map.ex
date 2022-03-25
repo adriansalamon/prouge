@@ -5,21 +5,22 @@ defmodule ProugeServer.GameMap do
   @derive Jason.Encoder
   defstruct rooms: [], h_tunnels: [], v_tunnels: [], width: 110, height: 30
 
-  @room_max_size 10
-  @room_min_size 6
-  @max_rooms 20
+  defmodule Item do
+    alias GameMap.Item, as: Item
+    @derive Jason.Encoder
+    defstruct x: 0, y: 0, type: nil
+
+    def new(x, y, type) do
+      %Item{x: x, y: y, type: type}
+    end
+  end
 
   defmodule Room do
     @derive Jason.Encoder
-    defstruct x1: 0, x2: 0, y1: 0, y2: 0
+    defstruct x1: 0, x2: 0, y1: 0, y2: 0, items: []
 
     def new(x, y, w, h) do
       %Room{x1: x, y1: y, x2: x + w, y2: y + h}
-    end
-
-    def intersecting?(room_1, room_2) do
-      room_1.x1 <= room_2.x2 && room_1.x2 >= room_2.x1 &&
-        room_1.y1 <= room_2.y2 && room_1.y2 >= room_2.y1
     end
 
     def center(%Room{} = room) do
@@ -27,10 +28,35 @@ defmodule ProugeServer.GameMap do
       center_y = div(room.y1 + room.y2, 2)
       %{x: center_x, y: center_y}
     end
+
+    def add_item(%Room{x1: x1, x2: x2, y1: y1, y2: y2, items: items} = room, type) do
+      x = Enum.random((x1 + 1)..(x2 + 1))
+      y = Enum.random((y1 + 1)..(y2 - 1))
+
+      %Room{room | items: [GameMap.Item.new(x, y, type) | items]}
+    end
   end
 
-  defmodule Rect do
-    alias GameMap.Rect, as: Node
+  defmodule HTunnel do
+    @derive Jason.Encoder
+    defstruct x1: 0, x2: 0, y: 0
+
+    def new(x1, x2, y) do
+      %HTunnel{x1: x1, x2: x2, y: y}
+    end
+  end
+
+  defmodule VTunnel do
+    @derive Jason.Encoder
+    defstruct x: 0, y1: 0, y2: 0
+
+    def new(y1, y2, x) do
+      %VTunnel{x: x, y1: y1, y2: y2}
+    end
+  end
+
+  defmodule BSP do
+    alias GameMap.BSP, as: Node
 
     defstruct x1: 0,
               x2: 0,
@@ -38,18 +64,31 @@ defmodule ProugeServer.GameMap do
               y2: 0,
               split_dir: nil,
               room: nil,
-              tunnel: nil,
+              tunnels: [],
               left: nil,
               right: nil
 
-    @default_depth 3
     @tol 0.2
     @min_height 4
     @min_width 8
+    # High value leads to larger rooms
+    @room_gen_size 6
 
     def generate_tree(width, height, depth) do
       generate_rects(%Node{x2: width, y2: height}, depth - 1)
       |> generate_rooms()
+      |> generate_tunnels()
+    end
+
+    def get_tunnels(%Node{tunnels: [], left: nil, right: nil}) do
+      []
+    end
+
+    def get_tunnels(%Node{tunnels: tunnels, left: left, right: right}) do
+      case tunnels do
+        [] -> get_tunnels(right) ++ get_tunnels(left)
+        t -> get_tunnels(right) ++ t ++ get_tunnels(left)
+      end
     end
 
     def get_rooms(%Node{left: nil, right: nil, room: room}) do
@@ -60,15 +99,40 @@ defmodule ProugeServer.GameMap do
       get_rooms(right) ++ get_rooms(left)
     end
 
+    def generate_tunnels(%Node{left: nil, right: nil, room: %Room{}} = node), do: node
+
+    def generate_tunnels(%Node{split_dir: :horizontal, left: top, right: bottom} = node) do
+      top_room = get_rooms(top) |> Enum.max_by(fn %Room{y2: y2} -> y2 end)
+      bottom_room = get_rooms(bottom) |> Enum.min_by(fn %Room{y1: y1} -> y1 end)
+
+      tunnels = GameMap.create_tunnel_connections(:vertical, top_room, bottom_room)
+
+      node
+      |> Map.put(:tunnels, tunnels)
+      |> Map.update!(:left, &generate_tunnels/1)
+      |> Map.update!(:right, &generate_tunnels/1)
+    end
+
+    def generate_tunnels(%Node{split_dir: :vertical, left: left, right: right} = node) do
+      left_room = get_rooms(left) |> Enum.max_by(fn %Room{x2: x2} -> x2 end)
+      right_room = get_rooms(right) |> Enum.min_by(fn %Room{x1: x1} -> x1 end)
+
+      tunnels = GameMap.create_tunnel_connections(:horizontal, left_room, right_room)
+
+      node
+      |> Map.put(:tunnels, tunnels)
+      |> Map.update!(:left, &generate_tunnels/1)
+      |> Map.update!(:right, &generate_tunnels/1)
+    end
+
     defp generate_rooms(%Node{x1: x1, x2: x2, y1: y1, y2: y2, left: nil, right: nil} = leaf) do
       rect_width = x2 - x1
       rect_height = y2 - y1
 
-      x = Enum.random((x1 + 1)..(x1 + div(rect_width, 10)))
-      y = Enum.random((y1 + 1)..(y1 + div(rect_height, 10)))
+      x = Enum.random((x1 + 1)..(x1 + div(rect_width, @room_gen_size)))
+      y = Enum.random((y1 + 1)..(y1 + div(rect_height, @room_gen_size)))
       w = Enum.random(@min_width..(x2 - x - 2))
       h = Enum.random(@min_height..(y2 - y - 2))
-
 
       %{leaf | room: Room.new(x, y, w, h)}
     end
@@ -88,11 +152,9 @@ defmodule ProugeServer.GameMap do
       height = y2 - y1
 
       split_dir =
-        case {height < @min_height, width < @min_width} do
-          {true, true} -> :none
-          {true, false} -> :vertical
-          {false, true} -> :horizontal
-          _ -> Enum.random([:vertical,:vertical,:vertical,:horizontal,:horizontal])
+        case height < width do
+          true -> :vertical
+          false -> :horizontal
         end
 
       case split_dir do
@@ -125,82 +187,91 @@ defmodule ProugeServer.GameMap do
             false ->
               root
           end
-
-        :none ->
-          root
       end
     end
   end
 
-  defmodule HCorridor do
-    @derive Jason.Encoder
-    defstruct x1: 0, x2: 0, y: 0
+  def create_tunnel_connections(:horizontal, left_room, right_room) do
+    t = max(left_room.y1, right_room.y1) + 1
+    b = min(left_room.y2, right_room.y2) - 1
+
+    case t <= b do
+      true ->
+        y_pos = Enum.random(t..b)
+        [HTunnel.new(left_room.x2, right_room.x1, y_pos)]
+
+      false ->
+        mid_x = div(right_room.x1 - left_room.x2, 2) + left_room.x2
+        start_y = div(left_room.y2 - left_room.y1, 2) + left_room.y1
+        end_y = div(right_room.y2 - right_room.y1, 2) + right_room.y1
+
+        [
+          HTunnel.new(left_room.x2, mid_x, start_y),
+          VTunnel.new(start_y, end_y, mid_x),
+          HTunnel.new(mid_x, right_room.x1, end_y)
+        ]
+    end
   end
 
-  defmodule VCorridor do
-    @derive Jason.Encoder
-    defstruct x: 0, y1: 0, y2: 0
+  def create_tunnel_connections(:vertical, top_room, bottom_room) do
+    l = max(top_room.x1, bottom_room.x1) + 1
+    r = min(top_room.x2, bottom_room.x2) - 1
+
+    case l <= r do
+      true ->
+        x_pos = Enum.random(l..r)
+        [VTunnel.new(top_room.y2, bottom_room.y1, x_pos)]
+
+      false ->
+        mid_y = div(bottom_room.y1 - top_room.y2, 2) + top_room.y2
+        start_x = div(top_room.x2 - top_room.x1, 2) + top_room.x1
+        end_x = div(bottom_room.x2 - bottom_room.x1, 2) + bottom_room.x1
+
+        [
+          VTunnel.new(mid_y, top_room.y2, start_x),
+          HTunnel.new(start_x, end_x, mid_y),
+          VTunnel.new(bottom_room.y1, mid_y, end_x)
+        ]
+    end
   end
 
   def generate_map() do
-    # map =
-    #   Enum.reduce(0..@max_rooms, %GameMap{}, fn _n, map ->
-    #     # Create rooms
-    #     w = Enum.random(@room_min_size..@room_max_size)
-    #     h = Enum.random(@room_min_size..@room_max_size)
-    #     x = Enum.random(0..(map.width - w))
-    #     y = Enum.random(0..(map.height - h))
-
-    #     new_room = Room.new(x, y, w, h)
-    #     intersecting = Enum.any?(map.rooms, fn room -> Room.intersecting?(room, new_room) end)
-
-    #     case intersecting do
-    #       true -> map
-    #       false -> add_room(map, new_room)
-    #     end
-    #   end)
-    #   |> connect_rooms()
     map = %GameMap{}
-    root = Rect.generate_tree(map.width, map.height, 6)
+    root = BSP.generate_tree(map.width, map.height, 5)
+    tunnels = BSP.get_tunnels(root)
 
-    Logger.debug("Generated map: #{inspect(root)}")
-    %GameMap{map | rooms: Rect.get_rooms(root)}
+    rooms = BSP.get_rooms(root)
+
+    %GameMap{
+      map
+      | rooms: rooms,
+        h_tunnels:
+          Enum.filter(tunnels, fn
+            %HTunnel{} -> true
+            _ -> false
+          end),
+        v_tunnels:
+          Enum.filter(tunnels, fn
+            %VTunnel{} -> true
+            _ -> false
+          end)
+    } |> add_item_at_room!("chest", -1)
   end
 
-  defp connect_rooms(%GameMap{rooms: rooms} = map) do
-    rooms
-    |> Enum.drop(1)
-    |> Enum.zip(rooms)
-    |> Enum.reduce(map, fn {room1, room2}, acc ->
-      %{x: prev_x, y: prev_y} = Room.center(room1)
-      %{x: new_x, y: new_y} = Room.center(room2)
+  defp add_item_at_room!(%{rooms: rooms} = map, type, index) do
+    len = length(rooms)
+    adjusted_index = case index < 0 do
+      true -> len + index
+      false -> index
+    end
 
-      case Enum.random(0..1) do
-        0 ->
-          acc
-          |> add_v_tunnel(prev_y, new_y, prev_x)
-          |> add_h_tunnel(prev_x, new_x, new_y)
-
-        1 ->
-          acc
-          |> add_h_tunnel(prev_x, new_x, prev_y)
-          |> add_v_tunnel(prev_y, new_y, new_x)
+    updated_rooms = rooms |> Enum.with_index() |> Enum.map(fn {room, i} ->
+      case i == adjusted_index do
+        true -> Room.add_item(room, type)
+        false -> room
       end
     end)
-  end
-
-  defp add_room(%GameMap{rooms: rooms} = map, room) do
-    %GameMap{map | rooms: [room | rooms]}
-  end
-
-  defp add_h_tunnel(%GameMap{h_tunnels: c} = map, x1, x2, y) do
-    new_c = %HCorridor{x1: min(x1, x2), x2: max(x1, x2), y: y}
-    %GameMap{map | h_tunnels: [new_c | c]}
-  end
-
-  defp add_v_tunnel(%GameMap{v_tunnels: cs} = map, y1, y2, x) do
-    c = %VCorridor{x: x, y1: min(y1, y2), y2: max(y1, y2)}
-    %GameMap{map | v_tunnels: [c | cs]}
+    %{map | rooms: updated_rooms}
   end
 
   def colliding?(
@@ -228,13 +299,13 @@ defmodule ProugeServer.GameMap do
     inside_h_tunnel =
       h_tunnels
       |> Enum.any?(fn %{x1: x1, x2: x2, y: y_tunnel} ->
-        y == y_tunnel && x >= x1 && x <= x2
+        y == y_tunnel && x >= min(x1, x2) && x <= max(x1, x2)
       end)
 
     inside_v_tunnel =
       v_tunnels
       |> Enum.any?(fn %{x: x_tunnel, y1: y1, y2: y2} ->
-        x == x_tunnel && y >= y1 && y <= y2
+        x == x_tunnel && y >= min(y1, y2) && y <= max(y1, y2)
       end)
 
     inside_h_tunnel || inside_v_tunnel
