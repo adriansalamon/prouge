@@ -29,6 +29,7 @@ defmodule ProugeServer.Client do
     {:ok, decoded} = Jason.decode(message)
     case Game.handle_command(pid, decoded) do
       :moved -> Game.send_game_state()
+      _ -> nil
     end
     {:noreply, state}
   end

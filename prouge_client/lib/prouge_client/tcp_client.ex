@@ -1,4 +1,5 @@
 defmodule ProugeClient.TCPClient do
+  alias ProugeClient.GameState
   use GenServer
   require Logger
 
@@ -38,14 +39,14 @@ defmodule ProugeClient.TCPClient do
 
   @impl true
   def handle_cast({:send_command, command}, %{socket: socket} = state) do
-    :gen_tcp.send(socket, Jason.encode!(%{command: command}))
+    :gen_tcp.send(socket, Poison.encode!(%{command: command}))
     {:noreply, state}
   end
 
   # Recieve tcp game state
   @impl true
   def handle_info({:tcp, _socket, message}, %{client_pid: pid} = state) do
-    {:ok, decoded} = Jason.decode(message)
+    {:ok, decoded} = Poison.decode(message, %{as: %GameState{}, keys: :atoms!})
     send(pid, {:event, {:new_game_state, decoded}})
     {:noreply, state}
   end

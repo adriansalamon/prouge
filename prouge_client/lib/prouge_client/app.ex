@@ -13,6 +13,7 @@ defmodule ProugeClient.App do
   def init(%{window: window}) do
     TCPClient.set_client(self())
     TCPClient.connect('localhost', 6969)
+
     %{
       game_state: %{},
       height: window.height - 2,
@@ -25,9 +26,12 @@ defmodule ProugeClient.App do
       {:event, %{key: key}} when key in @arrows ->
         TCPClient.send_command(%{move: key |> to_direction()})
         model
+
       {:event, {:new_game_state, state}} ->
         Map.put(model, :game_state, state)
-      _ -> model
+
+      _ ->
+        model
     end
   end
 
@@ -43,5 +47,4 @@ defmodule ProugeClient.App do
       @left -> :left
     end
   end
-
 end

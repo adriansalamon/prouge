@@ -5,7 +5,7 @@ defmodule ProugeServer.Game do
 
   defmodule GameState do
     @derive Jason.Encoder
-    defstruct players: [], map: %GameMap{}
+    defstruct players: [], map: %GameMap{}, state: :playing
   end
 
   defmodule Player do
@@ -48,7 +48,6 @@ defmodule ProugeServer.Game do
   # Add a new player to the game
   @impl true
   def handle_cast({:add_player, pid}, %{players: players, map: %{rooms: rooms}} = state) do
-
     %{x: x, y: y} = Enum.at(rooms, 0) |> GameMap.Room.center()
 
     newState = %{state | players: [%Player{pid: pid, x: x, y: y} | players]}
@@ -68,37 +67,62 @@ defmodule ProugeServer.Game do
 
   @impl true
   def handle_cast({:send_game_state}, %{players: players} = state) do
-    for %{pid: pid} <- players do ProugeServer.Client.send_state(pid, state) end
+    for %{pid: pid} <- players do
+      ProugeServer.Client.send_state(pid, state)
+    end
+
     {:noreply, state}
   end
 
   @impl true
-  def handle_call({:handle_command, pid, %{"command" => %{"move" => direction}}}, _from, state) do
+  def handle_call({:handle_command, pid, %{"command" => %{"move" => direction}}}, _from, %GameState{state: :playing} = state) do
     {:reply, :moved, state |> try_move_players(pid, direction)}
   end
 
+  @impl true
+  def handle_call({:handle_command, _, %{"command" => %{"move" => _}}}, _from, state) do
+    {:reply, :no_move, state}
+  end
+
   ## Game logic
-  defp try_move_players(%{players: players, map: map} = state, to_move, direction) do
+  defp try_move_players(%GameState{players: players, map: map} = game_state, to_move, direction) do
     newPositions =
       Enum.map(players, fn p ->
         cond do
           p.pid == to_move ->
-            new_p = case direction do
-              "right" -> %{p | x: p.x + 1}
-              "left" -> %{p | x: p.x - 1}
-              "up" -> %{p | y: p.y - 1}
-              "down" -> %{p | y: p.y + 1}
-            end
+            new_p =
+              case direction do
+                "right" -> %{p | x: p.x + 1}
+                "left" -> %{p | x: p.x - 1}
+                "up" -> %{p | y: p.y - 1}
+                "down" -> %{p | y: p.y + 1}
+              end
+
             colliding = GameMap.colliding?(map, players, new_p)
             Logger.debug("colliding: #{inspect(colliding)}")
+
             case colliding do
               true -> p
               false -> new_p
             end
-          true -> p
+
+          true ->
+            p
         end
       end)
 
-    %{state | players: newPositions}
+    {chest_x, chest_y} = ProugeServer.GameMap.get_chest_pos(map)
+
+    has_won =
+      Enum.any?(newPositions, fn p ->
+        p.x == chest_x && p.y == chest_y
+      end)
+
+    state = case has_won do
+      true -> :finished
+      false -> :playing
+    end
+
+    %{game_state | players: newPositions, state: state}
   end
 end

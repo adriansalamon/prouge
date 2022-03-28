@@ -1,10 +1,15 @@
 defmodule ProugeServer.GameMap do
   alias ProugeServer.GameMap, as: GameMap
   alias ProugeServer.Game.Player, as: Player
-  import Logger
   @derive Jason.Encoder
-  defstruct rooms: [], h_tunnels: [], v_tunnels: [], width: 110, height: 30
 
+  @depth 2
+  @width 40
+  @height 30
+
+  defstruct rooms: [], h_tunnels: [], v_tunnels: [], width: @width, height: @height
+
+  # Item on the map
   defmodule Item do
     alias GameMap.Item, as: Item
     @derive Jason.Encoder
@@ -15,6 +20,7 @@ defmodule ProugeServer.GameMap do
     end
   end
 
+  # A room to be displayed
   defmodule Room do
     @derive Jason.Encoder
     defstruct x1: 0, x2: 0, y1: 0, y2: 0, items: []
@@ -23,12 +29,14 @@ defmodule ProugeServer.GameMap do
       %Room{x1: x, y1: y, x2: x + w, y2: y + h}
     end
 
+    # Returns the center of a room
     def center(%Room{} = room) do
       center_x = div(room.x1 + room.x2, 2)
       center_y = div(room.y1 + room.y2, 2)
       %{x: center_x, y: center_y}
     end
 
+    # Adds an item with typ to a room
     def add_item(%Room{x1: x1, x2: x2, y1: y1, y2: y2, items: items} = room, type) do
       x = Enum.random((x1 + 1)..(x2 + 1))
       y = Enum.random((y1 + 1)..(y2 - 1))
@@ -37,6 +45,7 @@ defmodule ProugeServer.GameMap do
     end
   end
 
+  # A horizontal tunnel
   defmodule HTunnel do
     @derive Jason.Encoder
     defstruct x1: 0, x2: 0, y: 0
@@ -46,6 +55,7 @@ defmodule ProugeServer.GameMap do
     end
   end
 
+  # A vertical tunnel
   defmodule VTunnel do
     @derive Jason.Encoder
     defstruct x: 0, y1: 0, y2: 0
@@ -237,7 +247,7 @@ defmodule ProugeServer.GameMap do
 
   def generate_map() do
     map = %GameMap{}
-    root = BSP.generate_tree(map.width, map.height, 5)
+    root = BSP.generate_tree(map.width, map.height, @depth)
     tunnels = BSP.get_tunnels(root)
 
     rooms = BSP.get_rooms(root)
@@ -255,22 +265,29 @@ defmodule ProugeServer.GameMap do
             %VTunnel{} -> true
             _ -> false
           end)
-    } |> add_item_at_room!("chest", -1)
+    }
+    |> add_item_at_room!(:chest, -1)
   end
 
   defp add_item_at_room!(%{rooms: rooms} = map, type, index) do
     len = length(rooms)
-    adjusted_index = case index < 0 do
-      true -> len + index
-      false -> index
-    end
 
-    updated_rooms = rooms |> Enum.with_index() |> Enum.map(fn {room, i} ->
-      case i == adjusted_index do
-        true -> Room.add_item(room, type)
-        false -> room
+    adjusted_index =
+      case index < 0 do
+        true -> len + index
+        false -> index
       end
-    end)
+
+    updated_rooms =
+      rooms
+      |> Enum.with_index()
+      |> Enum.map(fn {room, i} ->
+        case i == adjusted_index do
+          true -> Room.add_item(room, type)
+          false -> room
+        end
+      end)
+
     %{map | rooms: updated_rooms}
   end
 
@@ -309,5 +326,22 @@ defmodule ProugeServer.GameMap do
       end)
 
     inside_h_tunnel || inside_v_tunnel
+  end
+
+  # Gets the positon of the chest, for winning the game
+  def get_chest_pos(%GameMap{rooms: rooms}) do
+    %Room{items: items} =
+      Enum.find(rooms, fn %Room{items: items} ->
+        Enum.any?(
+          items,
+          fn
+            %Item{type: :chest} -> true
+          end
+        )
+      end)
+
+    %Item{x: x, y: y} = Enum.find(items, fn %Item{type: :chest} -> true end)
+
+    {x, y}
   end
 end
