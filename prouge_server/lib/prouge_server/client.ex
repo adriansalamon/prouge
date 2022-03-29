@@ -44,9 +44,18 @@ defmodule ProugeServer.Client do
 
   @impl true
   def handle_cast({:send_state, game_state}, %{socket: socket} = state) do
-    encoded = Jason.encode!(game_state)
+    {:ok, encoded} = game_state
+      |> transform_output()
+      |> Jason.encode()
+
     Logger.debug("Sending: #{inspect(encoded)} over #{inspect(socket)}")
-    :gen_tcp.send(socket, Jason.encode!(game_state))
+    :gen_tcp.send(socket, encoded)
     {:noreply, state}
+  end
+
+  defp transform_output(%Game.GameState{map: %{items: items} = map} = game_state) do
+    list = items |> Map.to_list() |> Enum.map(fn {{x, y}, item} -> %{x: x, y: y, type: item.type} end)
+
+    %{game_state | map: %{map | items: list}}
   end
 end

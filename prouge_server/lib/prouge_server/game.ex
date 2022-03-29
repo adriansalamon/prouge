@@ -1,16 +1,44 @@
 defmodule ProugeServer.Game do
-  alias ProugeServer.GameMap, as: GameMap
+  alias ProugeServer.GameMap
+  alias ProugeServer.Game
   use GenServer
   require Logger
 
   defmodule GameState do
-    @derive Jason.Encoder
+    @derive {Jason.Encoder, only: [:players, :map, :state]}
     defstruct players: [], map: %GameMap{}, state: :playing
   end
 
+  defmodule Item do
+    @derive {Jason.Encoder, only: [:type]}
+    defstruct id: nil, type: nil
+
+    def new(type) do
+      id = Game.ItemCounter.get()
+      :ok = Game.ItemCounter.inc()
+      %Item{type: type, id: id}
+    end
+  end
+
+  defmodule ItemCounter do
+    use Agent
+
+    def start_link(_args) do
+      Agent.start_link(fn -> 0 end, name: __MODULE__)
+    end
+
+    def get do
+      Agent.get(__MODULE__, & &1)
+    end
+
+    def inc do
+      Agent.update(__MODULE__, &(&1 + 1))
+    end
+  end
+
   defmodule Player do
-    @derive {Jason.Encoder, only: [:x, :y]}
-    defstruct pid: nil, x: 0, y: 0
+    @derive {Jason.Encoder, only: [:x, :y, :items]}
+    defstruct pid: nil, x: 0, y: 0, items: []
   end
 
   def start_link(opts) do
@@ -75,8 +103,12 @@ defmodule ProugeServer.Game do
   end
 
   @impl true
-  def handle_call({:handle_command, pid, %{"command" => %{"move" => direction}}}, _from, %GameState{state: :playing} = state) do
-    {:reply, :moved, state |> try_move_players(pid, direction)}
+  def handle_call(
+        {:handle_command, pid, %{"command" => %{"move" => direction}}},
+        _from,
+        %GameState{state: :playing} = state
+      ) do
+    {:reply, :moved, state |> try_move_players(pid, direction) |> update_state()}
   end
 
   @impl true
@@ -111,18 +143,49 @@ defmodule ProugeServer.Game do
         end
       end)
 
+    %{game_state | players: newPositions}
+  end
+
+  defp update_state(state) do
+    state
+    |> pick_up_items()
+    |> check_chest()
+  end
+
+  defp pick_up_items(%GameState{players: players, map: %GameMap{items: items} = gamemap} = state) do
+    {players, items} =
+      Enum.reduce(players, {players, items}, fn p, {players_acc, items_acc} ->
+        case Map.get(items_acc, {p.x, p.y}) do
+          %{type: :key} = item -> {add_item_to_player(players_acc, p.pid, item), Map.delete(items_acc, {p.x, p.y})}
+          _ -> {players_acc, items_acc}
+        end
+      end)
+    %GameState{state | players: players, map: %GameMap{gamemap | items: items}}
+  end
+
+  defp add_item_to_player(players, pid, item) do
+    Enum.map(players, fn p ->
+      case p.pid == pid do
+        true -> %{p | items: [item | p.items]}
+        false -> p
+      end
+    end)
+  end
+
+  defp check_chest(%GameState{players: players, map: map} = game_state) do
     {chest_x, chest_y} = ProugeServer.GameMap.get_chest_pos(map)
 
     has_won =
-      Enum.any?(newPositions, fn p ->
+      Enum.any?(players, fn p ->
         p.x == chest_x && p.y == chest_y
       end)
 
-    state = case has_won do
-      true -> :finished
-      false -> :playing
-    end
+    state =
+      case has_won do
+        true -> :finished
+        false -> :playing
+      end
 
-    %{game_state | players: newPositions, state: state}
+    %{game_state | state: state}
   end
 end
