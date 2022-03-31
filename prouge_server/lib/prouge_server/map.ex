@@ -11,18 +11,6 @@ defmodule ProugeServer.GameMap do
 
   defstruct rooms: [], h_tunnels: [], v_tunnels: [], items: %{}, width: @width, height: @height
 
-  # Item on the map
-  defmodule MapItem do
-    alias GameMap.MapItem
-    alias ProugeServer.Game.Item
-    @derive Jason.Encoder
-    defstruct x: 0, y: 0, item: nil
-
-    def new(x, y, %Item{} = item) do
-      %MapItem{x: x, y: y, item: item}
-    end
-  end
-
   # A room to be displayed
   defmodule Room do
     @derive Jason.Encoder
@@ -82,7 +70,6 @@ defmodule ProugeServer.GameMap do
           end)
     }
     |> add_item_at_room(:chest, -1)
-    |> add_item_at_room(:key, 3)
   end
 
   def create_tunnel_connections(:horizontal, left_room, right_room) do
@@ -129,7 +116,7 @@ defmodule ProugeServer.GameMap do
     end
   end
 
-  defp add_item_at_room(%{rooms: rooms, items: items} = map, type, index) do
+  def add_item_at_room(%{rooms: rooms, items: items} = map, type, index) do
     %Room{x1: x1, x2: x2, y1: y1, y2: y2} = rooms |> Enum.at(index)
 
     x = Enum.random((x1 + 1)..(x2 - 1))
@@ -181,5 +168,12 @@ defmodule ProugeServer.GameMap do
   def get_chest_pos(%GameMap{items: items}) do
     alias ProugeServer.Game.Item
     items |> Enum.find(fn {_,  %Item{type: :chest}} -> true end) |> elem(0)
+  end
+
+  def increment_chest(%GameMap{items: items} = game_map) do
+    alias ProugeServer.Game.Item
+    {key, _} = items |> Enum.find(fn {_,  %Item{type: :chest}} -> true end)
+
+    %{game_map | items: Map.update!(items, key, &(Item.change_uses(&1, 1)))}
   end
 end

@@ -49,7 +49,6 @@ defmodule ProugeServer.Client do
     {:ok, encoded} =
       game_state
       |> transform_output(player_id)
-      |> IO.inspect()
       |> Jason.encode()
 
     Logger.debug("Sending: #{inspect(encoded)} over #{inspect(socket)}")

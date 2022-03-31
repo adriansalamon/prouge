@@ -11,18 +11,37 @@ defmodule ProugeServer.Game do
 
   defmodule Item do
     @derive {Jason.Encoder, only: [:type]}
-    defstruct id: nil, type: nil
+    defstruct id: nil, type: nil, uses: 1
 
     def new(type) do
       id = Game.ItemCounter.get()
       :ok = Game.ItemCounter.inc()
-      %Item{type: type, id: id}
+
+      uses =
+        case type do
+          :key -> 1
+          :chest -> 0
+        end
+
+      %Item{type: type, id: id, uses: uses}
+    end
+
+    def change_uses(%Item{uses: n} = item, change_by) do
+      %Item{item | uses: n + change_by}
     end
   end
 
   defmodule Player do
     @derive {Jason.Encoder, only: [:x, :y]}
     defstruct pid: nil, x: 0, y: 0, items: []
+
+    def has_key?(%Game.Player{items: items}) do
+      Enum.any?(items, fn item -> item.type == :key end)
+    end
+
+    def has_usable_key?(%Game.Player{items: items}) do
+      Enum.any?(items, fn item -> item.type == :key && item.uses >= 1 end)
+    end
   end
 
   defmodule ItemCounter do
@@ -75,10 +94,11 @@ defmodule ProugeServer.Game do
 
   # Add a new player to the game
   @impl true
-  def handle_cast({:add_player, pid}, %{players: players, map: %{rooms: rooms}} = state) do
+  def handle_cast({:add_player, pid}, %{players: players, map: %{rooms: rooms} = map} = state) do
     %{x: x, y: y} = Enum.at(rooms, 0) |> GameMap.Room.center()
 
-    newState = %{state | players: [%Player{pid: pid, x: x, y: y} | players]}
+    map = map |> GameMap.add_item_at_room(:key, Enum.random(2..5)) |> GameMap.increment_chest()
+    newState = %{state | players: [%Player{pid: pid, x: x, y: y} | players], map: map}
     {:noreply, newState}
   end
 
@@ -157,7 +177,15 @@ defmodule ProugeServer.Game do
       Enum.reduce(players, {players, items}, fn p, {players_acc, items_acc} ->
         case Map.get(items_acc, {p.x, p.y}) do
           %{type: :key} = item ->
-            {add_item_to_player(players_acc, p.pid, item), Map.delete(items_acc, {p.x, p.y})}
+            case Player.has_key?(p) do
+              # Player already has a key in inventory
+              true ->
+                {players_acc, items_acc}
+
+              # Otherwise, remove from map and add to inventory
+              false ->
+                {add_item_to_player(players_acc, p.pid, item), Map.delete(items_acc, {p.x, p.y})}
+            end
 
           _ ->
             {players_acc, items_acc}
@@ -176,20 +204,50 @@ defmodule ProugeServer.Game do
     end)
   end
 
-  defp check_chest(%GameState{players: players, map: map} = game_state) do
+  defp check_chest(%GameState{players: players, map: %GameMap{items: items} = map} = game_state) do
     {chest_x, chest_y} = ProugeServer.GameMap.get_chest_pos(map)
 
-    has_won =
-      Enum.any?(players, fn p ->
-        p.x == chest_x && p.y == chest_y
+    player_unlocking =
+      Enum.find(players, :none, fn p ->
+        p.x == chest_x && p.y == chest_y && Player.has_usable_key?(p)
       end)
 
-    state =
-      case has_won do
-        true -> :finished
-        false -> :playing
+    {items, players} =
+      case player_unlocking do
+        :none ->
+          {items, players}
+
+        player ->
+          {Map.update!(items, {chest_x, chest_y}, &Item.change_uses(&1, -1)),
+           Enum.map(players, fn p ->
+             case p.pid == player.pid do
+               true ->
+                 %{
+                   p
+                   | items:
+                       Enum.map(p.items, fn
+                         %Item{type: :key} = item ->
+                           Item.change_uses(item, -1)
+
+                         other ->
+                           other
+                       end)
+                 }
+
+               false ->
+                 p
+             end
+           end)}
       end
 
-    %{game_state | state: state}
+    %{uses: uses} = Map.get(items, {chest_x, chest_y})
+
+    state =
+      cond do
+        uses <= 0 -> :finished
+        true -> :playing
+      end
+
+    %{game_state | state: state, map: %{map | items: items}, players: players}
   end
 end
