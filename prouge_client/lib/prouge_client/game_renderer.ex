@@ -4,7 +4,12 @@ defmodule ProugeClient.GameRenderer do
   alias ProugeClient.GameMap
 
   def render(model) do
-    view do
+    bottom_bar =
+      bar do
+        render_bottom_label(model)
+      end
+
+    view(bottom_bar: bottom_bar) do
       panel(
         title: "Prouge game - move with arrow keys",
         height: :fill,
@@ -15,14 +20,20 @@ defmodule ProugeClient.GameRenderer do
     end
   end
 
-  defp render_game(%{game_state: %GameState{state: :not_started}}) do
+  defp render_bottom_label(%{game_state: %GameState{state: :not_started}}), do: []
+
+  defp render_bottom_label(%{game_state: %GameState{items: items}}) do
+    text = items |> Enum.with_index() |> Enum.reduce("Items:", fn {%{type: t}, i}, acc -> acc <> " #{Atom.to_string(t)} (#{i + 1})," end) |> String.replace_trailing(",", "")
+    label(content: text)
   end
 
-  defp render_game(%{game_state: %GameState{state: "finished"}}) do
-    label(content: "You won! grattis gmnnn <333")
+  defp render_game(%{game_state: %GameState{state: :not_started}}), do: []
+
+  defp render_game(%{game_state: %GameState{state: :finished}}) do
+    label(content: "You won! Congratulations")
   end
 
-  defp render_game(%{game_state: %GameState{state: "playing"} = game} = model) do
+  defp render_game(%{game_state: %GameState{state: :playing} = game} = model) do
     cells =
       []
       |> draw_players(game)
@@ -54,8 +65,8 @@ defmodule ProugeClient.GameRenderer do
     item_cells =
       Enum.map(items, fn %GameMap.Item{x: x, y: y, type: type} ->
         case type do
-          "chest" -> canvas_cell(x: x, y: y, char: "X")
-          "key" -> canvas_cell(x: x, y: y, char: "k")
+          :chest -> canvas_cell(x: x, y: y, char: "X", color: :red)
+          :key -> canvas_cell(x: x, y: y, char: "k", color: :yellow)
         end
       end)
 

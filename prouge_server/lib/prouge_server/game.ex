@@ -5,8 +5,8 @@ defmodule ProugeServer.Game do
   require Logger
 
   defmodule GameState do
-    @derive {Jason.Encoder, only: [:players, :map, :state]}
-    defstruct players: [], map: %GameMap{}, state: :playing
+    @derive {Jason.Encoder, only: [:players, :map, :state, :items]}
+    defstruct players: [], map: %GameMap{}, state: :playing, items: []
   end
 
   defmodule Item do
@@ -18,6 +18,11 @@ defmodule ProugeServer.Game do
       :ok = Game.ItemCounter.inc()
       %Item{type: type, id: id}
     end
+  end
+
+  defmodule Player do
+    @derive {Jason.Encoder, only: [:x, :y]}
+    defstruct pid: nil, x: 0, y: 0, items: []
   end
 
   defmodule ItemCounter do
@@ -34,11 +39,6 @@ defmodule ProugeServer.Game do
     def inc do
       Agent.update(__MODULE__, &(&1 + 1))
     end
-  end
-
-  defmodule Player do
-    @derive {Jason.Encoder, only: [:x, :y, :items]}
-    defstruct pid: nil, x: 0, y: 0, items: []
   end
 
   def start_link(opts) do
@@ -156,10 +156,14 @@ defmodule ProugeServer.Game do
     {players, items} =
       Enum.reduce(players, {players, items}, fn p, {players_acc, items_acc} ->
         case Map.get(items_acc, {p.x, p.y}) do
-          %{type: :key} = item -> {add_item_to_player(players_acc, p.pid, item), Map.delete(items_acc, {p.x, p.y})}
-          _ -> {players_acc, items_acc}
+          %{type: :key} = item ->
+            {add_item_to_player(players_acc, p.pid, item), Map.delete(items_acc, {p.x, p.y})}
+
+          _ ->
+            {players_acc, items_acc}
         end
       end)
+
     %GameState{state | players: players, map: %GameMap{gamemap | items: items}}
   end
 

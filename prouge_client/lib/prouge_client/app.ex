@@ -1,8 +1,8 @@
 defmodule ProugeClient.App do
   @behaviour Ratatouille.App
-  import Ratatouille.View
   import Ratatouille.Constants, only: [key: 1]
-  alias ProugeClient.TCPClient, as: TCPClient
+  alias ProugeClient.TCPClient
+  alias ProugeClient.GameState
 
   @up key(:arrow_up)
   @down key(:arrow_down)
@@ -15,7 +15,7 @@ defmodule ProugeClient.App do
     TCPClient.connect('localhost', 6969)
 
     %{
-      game_state: %{},
+      game_state: %GameState{},
       height: window.height - 2,
       width: window.width - 2
     }

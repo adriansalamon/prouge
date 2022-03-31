@@ -27,10 +27,12 @@ defmodule ProugeServer.Client do
     :inet.setopts(socket, active: :once)
     Logger.debug("Recieved message: #{inspect(message)}, from #{inspect(socket)}")
     {:ok, decoded} = Jason.decode(message)
+
     case Game.handle_command(pid, decoded) do
       :moved -> Game.send_game_state()
       _ -> nil
     end
+
     {:noreply, state}
   end
 
@@ -43,9 +45,11 @@ defmodule ProugeServer.Client do
   end
 
   @impl true
-  def handle_cast({:send_state, game_state}, %{socket: socket} = state) do
-    {:ok, encoded} = game_state
-      |> transform_output()
+  def handle_cast({:send_state, game_state}, %{socket: socket, pid: player_id} = state) do
+    {:ok, encoded} =
+      game_state
+      |> transform_output(player_id)
+      |> IO.inspect()
       |> Jason.encode()
 
     Logger.debug("Sending: #{inspect(encoded)} over #{inspect(socket)}")
@@ -53,9 +57,15 @@ defmodule ProugeServer.Client do
     {:noreply, state}
   end
 
-  defp transform_output(%Game.GameState{map: %{items: items} = map} = game_state) do
-    list = items |> Map.to_list() |> Enum.map(fn {{x, y}, item} -> %{x: x, y: y, type: item.type} end)
+  defp transform_output(
+         %Game.GameState{map: %{items: items} = map, players: players} = game_state,
+         player_id
+       ) do
+    map_items =
+      items |> Map.to_list() |> Enum.map(fn {{x, y}, item} -> %{x: x, y: y, type: item.type} end)
 
-    %{game_state | map: %{map | items: list}}
+    %{items: player_items} = players |> Enum.find(&(&1.pid == player_id))
+
+    %{game_state | map: %{map | items: map_items}, items: player_items}
   end
 end

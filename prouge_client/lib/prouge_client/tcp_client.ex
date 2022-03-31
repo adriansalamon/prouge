@@ -47,7 +47,7 @@ defmodule ProugeClient.TCPClient do
   @impl true
   def handle_info({:tcp, _socket, message}, %{client_pid: pid} = state) do
     {:ok, decoded} = Poison.decode(message, %{as: %GameState{}, keys: :atoms!})
-    send(pid, {:event, {:new_game_state, decoded}})
+    send(pid, {:event, {:new_game_state, decoded |> GameState.atomize()}})
     {:noreply, state}
   end
 
