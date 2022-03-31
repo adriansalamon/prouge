@@ -8,7 +8,7 @@ defmodule ProugeClient.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      {Ratatouille.Runtime.Supervisor, runtime: [app: ProugeClient.App]},
+      {Ratatouille.Runtime.Supervisor, runtime: [app: ProugeClient.App, shutdown: :system]},
       {ProugeClient.TCPClient, []}
       # Starts a worker by calling: ProugeServer.Worker.start_link(arg)
       # {ProugeServer.Worker, arg}

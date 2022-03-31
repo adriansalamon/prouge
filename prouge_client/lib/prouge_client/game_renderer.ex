@@ -3,37 +3,35 @@ defmodule ProugeClient.GameRenderer do
   alias ProugeClient.GameState
   alias ProugeClient.GameMap
 
-  def render(model) do
-    bottom_bar =
-      bar do
-        render_bottom_label(model)
-      end
+  def render_bottom_label(%{game_state: %GameState{state: :not_started}}), do: []
 
-    view(bottom_bar: bottom_bar) do
-      panel(
-        title: "Prouge game - move with arrow keys",
-        height: :fill,
-        padding: 0
-      ) do
-        render_game(model)
-      end
-    end
-  end
+  def render_bottom_label(%{game_state: %GameState{items: items}}) do
+    text =
+      items
+      |> Enum.with_index()
+      |> Enum.reduce("Items:", fn {%{type: t}, i}, acc ->
+        acc <> " #{Atom.to_string(t)} (#{i + 1}),"
+      end)
+      |> String.replace_trailing(",", "")
 
-  defp render_bottom_label(%{game_state: %GameState{state: :not_started}}), do: []
-
-  defp render_bottom_label(%{game_state: %GameState{items: items}}) do
-    text = items |> Enum.with_index() |> Enum.reduce("Items:", fn {%{type: t}, i}, acc -> acc <> " #{Atom.to_string(t)} (#{i + 1})," end) |> String.replace_trailing(",", "")
     label(content: text)
   end
 
-  defp render_game(%{game_state: %GameState{state: :not_started}}), do: []
+  def render_game(%{game_state: %GameState{state: :not_started}}), do: []
 
-  defp render_game(%{game_state: %GameState{state: :finished}}) do
-    label(content: "You won! Congratulations")
+  def render_game(%{game_state: %GameState{state: :finished} = game} = model) do
+    cells =
+      []
+      |> draw_rooms(game)
+      |> draw_h_tunnels(game)
+      |> draw_v_tunnels(game)
+
+    canvas(height: model.height, width: model.width) do
+      cells
+    end
   end
 
-  defp render_game(%{game_state: %GameState{state: :playing} = game} = model) do
+  def render_game(%{game_state: %GameState{state: :playing} = game} = model) do
     cells =
       []
       |> draw_players(game)
@@ -47,7 +45,7 @@ defmodule ProugeClient.GameRenderer do
     end
   end
 
-  defp render_game(_model), do: []
+  def render_game(_model), do: []
 
   defp draw_players(cells, %GameState{players: players}) do
     player_cells =
