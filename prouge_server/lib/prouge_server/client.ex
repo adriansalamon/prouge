@@ -1,7 +1,8 @@
 defmodule ProugeServer.Client do
   require Logger
   use GenServer, restart: :temporary
-  alias ProugeServer.Game, as: Game
+  alias ProugeServer.Game
+  alias ProugeServer.GameMap
 
   @initial_state %{socket: nil, pid: nil}
 
@@ -60,11 +61,14 @@ defmodule ProugeServer.Client do
          %Game.GameState{map: %{items: items} = map, players: players} = game_state,
          player_id
        ) do
-    map_items =
-      items |> Map.to_list() |> Enum.map(fn {{x, y}, item} -> %{x: x, y: y, type: item.type} end)
-
     discovered_rooms =
       Enum.filter(map.rooms, fn room -> Enum.member?(room.discovered_by, player_id) end)
+
+    map_items =
+      items
+      |> Map.to_list()
+      |> Enum.map(fn {{x, y}, item} -> %{x: x, y: y, type: item.type} end)
+      |> Enum.filter(fn %{x: x, y: y} -> GameMap.inside_room?(discovered_rooms, x, y) end)
 
     discovered_h_tunnels =
       Enum.filter(map.h_tunnels, fn t -> Enum.member?(t.discovered_by, player_id) end)
@@ -74,6 +78,16 @@ defmodule ProugeServer.Client do
 
     %{items: player_items} = players |> Enum.find(&(&1.pid == player_id))
 
-    %{game_state | map: %{map | items: map_items, rooms: discovered_rooms, h_tunnels: discovered_h_tunnels, v_tunnels: discovered_v_tunnels}, items: player_items}
+    %{
+      game_state
+      | map: %{
+          map
+          | items: map_items,
+            rooms: discovered_rooms,
+            h_tunnels: discovered_h_tunnels,
+            v_tunnels: discovered_v_tunnels
+        },
+        items: player_items
+    }
   end
 end

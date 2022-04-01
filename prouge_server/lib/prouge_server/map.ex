@@ -196,7 +196,7 @@ defmodule ProugeServer.GameMap do
     end)
   end
 
-  defp inside_room?(rooms, x, y) do
+  def inside_room?(rooms, x, y) do
     Enum.any?(rooms, fn %Room{x1: x1, x2: x2, y1: y1, y2: y2} ->
       x > x1 && x < x2 && y > y1 && y < y2
     end)
