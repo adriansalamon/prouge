@@ -1,4 +1,7 @@
 defmodule ProugeClient.GameRenderer do
+  @moduledoc """
+  Methods for rendering the game using Ratatoullie
+  """
   import Ratatouille.View
   alias ProugeClient.GameState
   alias ProugeClient.GameMap
@@ -6,6 +9,7 @@ defmodule ProugeClient.GameRenderer do
   def render_bottom_label(%{game_state: %GameState{state: :not_started}}), do: []
 
   def render_bottom_label(%{game_state: %GameState{items: items}}) do
+    # Text for the items in the bottom label
     text =
       items
       |> Enum.reduce("Items:", fn %{type: t, uses: uses}, acc ->
@@ -16,8 +20,10 @@ defmodule ProugeClient.GameRenderer do
     label(content: text)
   end
 
+  # Do not render anything if game is not started
   def render_game(%{game_state: %GameState{state: :not_started}}), do: []
 
+  # Only draw rooms and tunnels when game is finished
   def render_game(%{game_state: %GameState{state: :finished} = game} = model) do
     cells =
       []
@@ -31,6 +37,7 @@ defmodule ProugeClient.GameRenderer do
     end
   end
 
+  # Render when playing game
   def render_game(%{game_state: %GameState{state: :playing} = game} = model) do
     cells =
       []
@@ -45,8 +52,6 @@ defmodule ProugeClient.GameRenderer do
       cells
     end
   end
-
-  def render_game(_model), do: []
 
   defp draw_players(cells, %GameState{players: players}) do
     player_cells =
@@ -107,15 +112,16 @@ defmodule ProugeClient.GameRenderer do
     door_cells ++ cells
   end
 
+  # Returns a list of all cells to draw for a single room
   defp room_cells(%GameMap.Room{x1: x1, x2: x2, y1: y1, y2: y2}) do
-    a = for x <- x1..x2, do: canvas_cell(x: x, y: y1, char: "-")
-    b = for x <- x1..x2, do: canvas_cell(x: x, y: y2, char: "-")
-    c = for y <- (y1 + 1)..(y2 - 1), do: canvas_cell(x: x1, y: y, char: "|")
-    d = for y <- (y1 + 1)..(y2 - 1), do: canvas_cell(x: x2, y: y, char: "|")
+    top = for x <- x1..x2, do: canvas_cell(x: x, y: y1, char: "-")
+    bottom = for x <- x1..x2, do: canvas_cell(x: x, y: y2, char: "-")
+    left = for y <- (y1 + 1)..(y2 - 1), do: canvas_cell(x: x1, y: y, char: "|")
+    right = for y <- (y1 + 1)..(y2 - 1), do: canvas_cell(x: x2, y: y, char: "|")
 
     insides =
       for x <- (x1 + 1)..(x2 - 1), y <- (y1 + 1)..(y2 - 1), do: canvas_cell(x: x, y: y, char: ".")
 
-    [insides, a, b, c | d]
+    [insides, top, bottom, left | right]
   end
 end

@@ -39,6 +39,7 @@ defmodule ProugeClient.Item do
   defstruct type: nil, uses: 0
 end
 
+# Used for Poison to decode into atoms
 defmodule ProugeClient.GameState do
   alias ProugeClient.GameState
   alias ProugeClient.GameMap
@@ -50,16 +51,21 @@ defmodule ProugeClient.GameState do
 
   defstruct map: %GameMap{}, players: [%Player{}], state: :not_started, items: [%Item{}]
 
+  # Converts binary data (states and item types) from binary strings to Elixir atoms
+  @spec atomize(%GameState{}) :: %GameState{}
   def atomize(%GameState{items: player_items, map: %GameMap{items: map_items} = game_map, state: state} = game_state) do
+    # Converts the state string to an atom
     state = case state do
       state when is_atom(state)-> state
       state -> String.to_existing_atom(state)
     end
+    # If not an ok state, raise error
     state = case Enum.member?(@states, state) do
       true -> state
       false -> raise ArgumentError, "State not valid"
     end
 
+    # For each item in inventory, convert type to atom and raise error if not ok item type
     updated_player_items = Enum.map(player_items, fn %{type: type} = item ->
       type = String.to_existing_atom(type)
       case Enum.member?(@item_types, type) do
@@ -68,6 +74,7 @@ defmodule ProugeClient.GameState do
       end
     end)
 
+    # For each item on the map, convert type to atom and raise error if not ok item type
     updated_map_items = Enum.map(map_items, fn  %{type: type} = item ->
       type = String.to_existing_atom(type)
       case Enum.member?(@item_types, type) do

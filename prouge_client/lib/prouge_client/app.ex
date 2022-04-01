@@ -1,4 +1,7 @@
 defmodule ProugeClient.App do
+  @moduledoc """
+  The Ratatouille app that runs the user interface.
+  """
   @behaviour Ratatouille.App
   import Ratatouille.Constants, only: [key: 1]
   import Ratatouille.View
@@ -13,9 +16,12 @@ defmodule ProugeClient.App do
   @arrows [@up, @down, @left, @right]
 
   def init(%{window: window}) do
-    TCPClient.set_client(self())
+    # Adds the ratatoulle app pid to the tcp client so that it can send messages to it
+    TCPClient.register_app_pid(self())
+    # Connect to the game server
     TCPClient.connect('localhost', 6969)
 
+    # Initial ratatoulle model
     %{
       game_state: %GameState{},
       height: window.height - 2,
@@ -24,19 +30,25 @@ defmodule ProugeClient.App do
     }
   end
 
+  # Callback when an event is triggered
   def update(model, msg) do
     case msg do
       {:event, %{ch: ?h}} ->
+        # When pressing "h" for help
         case model.game_state.state do
           :playing -> %{model | overlay_toggled: !model.overlay_toggled}
           _ -> model
         end
 
       {:event, %{key: key}} when key in @arrows ->
-        TCPClient.send_command(%{move: key |> to_direction()})
+        # Trying to move, send command {"move": "direction"}
+        TCPClient.send_command(%{move: key |> key_to_direction()})
         model
 
       {:event, {:new_game_state, state}} ->
+        # New game state recieved from TCP client process
+
+        # Display overlayed if game is finished
         overlay_toggled =
           case state.state do
             :finished -> true
@@ -62,15 +74,18 @@ defmodule ProugeClient.App do
         height: :fill,
         padding: 0
       ) do
+        # Render the main game
         GameRenderer.render_game(model)
       end
 
+      # Render the overlay
       if model.overlay_toggled do
         {title, text} =
           case model.game_state.state do
             :playing ->
               {"Help, dismiss with [h]",
-               "Move with arrow keys. In order to win, all players must pick up a key (marked with k) and unlock the chest (marked with X). To unlock the chest, you need to walk over the X."}
+               "Move with arrow keys. In order to win, all players must pick up a key (marked with k) and
+                unlock the chest (marked with X). To unlock the chest, you need to walk over the X."}
 
             :finished ->
               {"You won!", "Congratulations!\nPress [q] to exit"}
@@ -88,7 +103,7 @@ defmodule ProugeClient.App do
     end
   end
 
-  defp to_direction(key) do
+  defp key_to_direction(key) do
     case key do
       @up -> :up
       @down -> :down
