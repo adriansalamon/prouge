@@ -13,8 +13,8 @@ defmodule ProugeServer.GameMap do
 
   # A room to be displayed
   defmodule Room do
-    @derive Jason.Encoder
-    defstruct x1: 0, x2: 0, y1: 0, y2: 0
+    @derive {Jason.Encoder, only: [:x1, :x2, :y1, :y2, :doors]}
+    defstruct x1: 0, x2: 0, y1: 0, y2: 0, discovered_by: [], doors: []
 
     def new(x, y, w, h) do
       %Room{x1: x, y1: y, x2: x + w, y2: y + h}
@@ -30,21 +30,29 @@ defmodule ProugeServer.GameMap do
 
   # A horizontal tunnel
   defmodule HTunnel do
-    @derive Jason.Encoder
-    defstruct x1: 0, x2: 0, y: 0
+    @derive {Jason.Encoder, only: [:x1, :x2, :y]}
+    defstruct x1: 0, x2: 0, y: 0, discovered_by: []
 
     def new(x1, x2, y) do
       %HTunnel{x1: x1, x2: x2, y: y}
+    end
+
+    def inside?(%HTunnel{x1: x1, x2: x2, y: y_t}, x, y) do
+      y == y_t && x >= min(x1, x2) && x <= max(x1, x2)
     end
   end
 
   # A vertical tunnel
   defmodule VTunnel do
-    @derive Jason.Encoder
-    defstruct x: 0, y1: 0, y2: 0
+    @derive {Jason.Encoder, only: [:x, :y1, :y2]}
+    defstruct x: 0, y1: 0, y2: 0, discovered_by: []
 
     def new(y1, y2, x) do
       %VTunnel{x: x, y1: y1, y2: y2}
+    end
+
+    def inside?(%VTunnel{x: x_t, y1: y1, y2: y2}, x, y) do
+      x_t == x && y >= min(y1, y2) && y <= max(y1, y2)
     end
   end
 
@@ -52,8 +60,7 @@ defmodule ProugeServer.GameMap do
     map = %GameMap{}
     root = BSP.generate_tree(map.width, map.height, @depth)
     tunnels = BSP.get_tunnels(root)
-
-    rooms = BSP.get_rooms(root)
+    rooms = BSP.get_rooms(root) |> Enum.map(fn room -> add_doors(room, tunnels) end)
 
     %GameMap{
       map
@@ -72,6 +79,7 @@ defmodule ProugeServer.GameMap do
     |> add_item_at_room(:chest, -1)
   end
 
+  # Creates and returns tunnels between left and right rooms
   def create_tunnel_connections(:horizontal, left_room, right_room) do
     t = max(left_room.y1, right_room.y1) + 1
     b = min(left_room.y2, right_room.y2) - 1
@@ -94,6 +102,7 @@ defmodule ProugeServer.GameMap do
     end
   end
 
+  # Creates and returns tunnels between top and bottom rooms
   def create_tunnel_connections(:vertical, top_room, bottom_room) do
     l = max(top_room.x1, bottom_room.x1) + 1
     r = min(top_room.x2, bottom_room.x2) - 1
@@ -116,6 +125,38 @@ defmodule ProugeServer.GameMap do
     end
   end
 
+  def add_doors(%Room{doors: doors, x1: x1, x2: x2, y1: y1, y2: y2} = room, tunnels)
+      when is_list(tunnels) do
+    doors =
+      Enum.reduce(tunnels, doors, fn tunnel, acc ->
+        case tunnel do
+          %HTunnel{x1: t_x1, x2: t_x2, y: y} ->
+            if y >= y1 && y <= y2 do
+              cond do
+                x1 == max(t_x1, t_x2) -> [%{x: x1, y: y} | acc]
+                x2 == min(t_x1, t_x2) -> [%{x: x2, y: y} | acc]
+                true -> acc
+              end
+            else
+              acc
+            end
+
+          %VTunnel{y1: t_y1, y2: t_y2, x: x} ->
+            if x >= x1 && x <= x2 do
+              cond do
+                y1 == max(t_y1, t_y2) -> [%{x: x, y: y1} | acc]
+                y2 == min(t_y1, t_y2) -> [%{x: x, y: y2} | acc]
+                true -> acc
+              end
+            else
+              acc
+            end
+        end
+      end)
+
+    %{room | doors: doors}
+  end
+
   def add_item_at_room(%{rooms: rooms, items: items} = map, type, index) do
     %Room{x1: x1, x2: x2, y1: y1, y2: y2} = rooms |> Enum.at(index)
 
@@ -133,7 +174,7 @@ defmodule ProugeServer.GameMap do
         %Player{x: x, y: y} = player
       ) do
     colliding_with_players?(players, player) ||
-      !(inside_room(rooms, x, y) || inside_tunnel(v_tunnels, h_tunnels, x, y))
+      !(inside_room?(rooms, x, y) || inside_tunnel?(v_tunnels, h_tunnels, x, y))
   end
 
   defp colliding_with_players?(players, %{pid: p_pid, x: p_x, y: p_y}) do
@@ -142,24 +183,47 @@ defmodule ProugeServer.GameMap do
     end)
   end
 
-  defp inside_room(rooms, x, y) do
+  # If player inside a room and the room is undiscovered, add player to discovered_by
+  def try_discover_rooms(rooms, x, y, pid) do
+    Enum.map(rooms, fn %Room{x1: x1, x2: x2, y1: y1, y2: y2, discovered_by: discovered} = room ->
+      inside_room = x > x1 && x < x2 && y > y1 && y < y2
+
+      if inside_room && !Enum.member?(discovered, pid) do
+        %{room | discovered_by: [pid | discovered]}
+      else
+        room
+      end
+    end)
+  end
+
+  defp inside_room?(rooms, x, y) do
     Enum.any?(rooms, fn %Room{x1: x1, x2: x2, y1: y1, y2: y2} ->
       x > x1 && x < x2 && y > y1 && y < y2
     end)
   end
 
-  defp inside_tunnel(v_tunnels, h_tunnels, x, y) do
-    inside_h_tunnel =
-      h_tunnels
-      |> Enum.any?(fn %{x1: x1, x2: x2, y: y_tunnel} ->
-        y == y_tunnel && x >= min(x1, x2) && x <= max(x1, x2)
-      end)
+  def try_discover_tunnels(tunnels, x, y, pid) do
+    Enum.map(tunnels, fn
+      %HTunnel{discovered_by: discovered} = t ->
+        if HTunnel.inside?(t, x, y) && !Enum.member?(discovered, pid) do
+          %{t | discovered_by: [pid | discovered]}
+        else
+          t
+        end
 
-    inside_v_tunnel =
-      v_tunnels
-      |> Enum.any?(fn %{x: x_tunnel, y1: y1, y2: y2} ->
-        x == x_tunnel && y >= min(y1, y2) && y <= max(y1, y2)
-      end)
+      %VTunnel{discovered_by: discovered} = t ->
+        if VTunnel.inside?(t, x, y) && !Enum.member?(discovered, pid) do
+          %{t | discovered_by: [pid | discovered]}
+        else
+          t
+        end
+    end)
+  end
+
+  defp inside_tunnel?(v_tunnels, h_tunnels, x, y) do
+    inside_h_tunnel = Enum.any?(h_tunnels, fn t -> HTunnel.inside?(t, x, y) end)
+
+    inside_v_tunnel = Enum.any?(v_tunnels, fn t -> VTunnel.inside?(t, x, y) end)
 
     inside_h_tunnel || inside_v_tunnel
   end
@@ -167,13 +231,13 @@ defmodule ProugeServer.GameMap do
   # Gets the positon of the chest, for winning the game
   def get_chest_pos(%GameMap{items: items}) do
     alias ProugeServer.Game.Item
-    items |> Enum.find(fn {_,  %Item{type: :chest}} -> true end) |> elem(0)
+    items |> Enum.find(fn {_, %Item{type: :chest}} -> true end) |> elem(0)
   end
 
   def increment_chest(%GameMap{items: items} = game_map) do
     alias ProugeServer.Game.Item
-    {key, _} = items |> Enum.find(fn {_,  %Item{type: :chest}} -> true end)
+    {key, _} = items |> Enum.find(fn {_, %Item{type: :chest}} -> true end)
 
-    %{game_map | items: Map.update!(items, key, &(Item.change_uses(&1, 1)))}
+    %{game_map | items: Map.update!(items, key, &Item.change_uses(&1, 1))}
   end
 end

@@ -10,8 +10,13 @@ defmodule ProugeClient.GameMap.Item do
   defstruct x: 0, y: 0, type: nil
 end
 
+defmodule ProugeClient.GameMap.Door do
+  defstruct x: 0, y: 0
+end
+
 defmodule ProugeClient.GameMap.Room do
-  defstruct x1: 0, x2: 0, y1: 0, y2: 0
+  alias ProugeClient.GameMap.Door
+  defstruct x1: 0, x2: 0, y1: 0, y2: 0, doors: [%Door{}]
 end
 
 defmodule ProugeClient.GameMap.Item do
@@ -31,7 +36,7 @@ defmodule ProugeClient.Player do
 end
 
 defmodule ProugeClient.Item do
-  defstruct type: nil
+  defstruct type: nil, uses: 0
 end
 
 defmodule ProugeClient.GameState do

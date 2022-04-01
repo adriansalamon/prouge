@@ -8,9 +8,8 @@ defmodule ProugeClient.GameRenderer do
   def render_bottom_label(%{game_state: %GameState{items: items}}) do
     text =
       items
-      |> Enum.with_index()
-      |> Enum.reduce("Items:", fn {%{type: t}, i}, acc ->
-        acc <> " #{Atom.to_string(t)} (#{i + 1}),"
+      |> Enum.reduce("Items:", fn %{type: t, uses: uses}, acc ->
+        acc <> " #{Atom.to_string(t)} (#{uses} uses),"
       end)
       |> String.replace_trailing(",", "")
 
@@ -25,6 +24,7 @@ defmodule ProugeClient.GameRenderer do
       |> draw_rooms(game)
       |> draw_h_tunnels(game)
       |> draw_v_tunnels(game)
+      |> draw_doors(game)
 
     canvas(height: model.height, width: model.width) do
       cells
@@ -36,6 +36,7 @@ defmodule ProugeClient.GameRenderer do
       []
       |> draw_players(game)
       |> draw_items(game)
+      |> draw_doors(game)
       |> draw_rooms(game)
       |> draw_h_tunnels(game)
       |> draw_v_tunnels(game)
@@ -94,6 +95,16 @@ defmodule ProugeClient.GameRenderer do
       end)
 
     [tunnel_cells | cells]
+  end
+
+  defp draw_doors(cells, %GameState{map: %GameMap{rooms: rooms}}) do
+    door_cells =
+      rooms
+      |> Enum.flat_map(fn %{doors: doors} ->
+        doors |> Enum.map(fn %{x: x, y: y} -> canvas_cell(x: x, y: y, char: "+") end)
+      end)
+
+    door_cells ++ cells
   end
 
   defp room_cells(%GameMap.Room{x1: x1, x2: x2, y1: y1, y2: y2}) do

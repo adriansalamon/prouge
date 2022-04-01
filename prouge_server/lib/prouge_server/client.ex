@@ -63,8 +63,17 @@ defmodule ProugeServer.Client do
     map_items =
       items |> Map.to_list() |> Enum.map(fn {{x, y}, item} -> %{x: x, y: y, type: item.type} end)
 
+    discovered_rooms =
+      Enum.filter(map.rooms, fn room -> Enum.member?(room.discovered_by, player_id) end)
+
+    discovered_h_tunnels =
+      Enum.filter(map.h_tunnels, fn t -> Enum.member?(t.discovered_by, player_id) end)
+
+    discovered_v_tunnels =
+      Enum.filter(map.v_tunnels, fn t -> Enum.member?(t.discovered_by, player_id) end)
+
     %{items: player_items} = players |> Enum.find(&(&1.pid == player_id))
 
-    %{game_state | map: %{map | items: map_items}, items: player_items}
+    %{game_state | map: %{map | items: map_items, rooms: discovered_rooms, h_tunnels: discovered_h_tunnels, v_tunnels: discovered_v_tunnels}, items: player_items}
   end
 end

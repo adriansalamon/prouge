@@ -10,7 +10,7 @@ defmodule ProugeServer.Game do
   end
 
   defmodule Item do
-    @derive {Jason.Encoder, only: [:type]}
+    @derive {Jason.Encoder, only: [:type, :uses]}
     defstruct id: nil, type: nil, uses: 1
 
     def new(type) do
@@ -98,7 +98,7 @@ defmodule ProugeServer.Game do
     %{x: x, y: y} = Enum.at(rooms, 0) |> GameMap.Room.center()
 
     map = map |> GameMap.add_item_at_room(:key, Enum.random(2..5)) |> GameMap.increment_chest()
-    newState = %{state | players: [%Player{pid: pid, x: x, y: y} | players], map: map}
+    newState = %{state | players: [%Player{pid: pid, x: x, y: y} | players], map: map} |> update_state()
     {:noreply, newState}
   end
 
@@ -170,6 +170,8 @@ defmodule ProugeServer.Game do
     state
     |> pick_up_items()
     |> check_chest()
+    |> discover_rooms()
+    |> discover_tunnels()
   end
 
   defp pick_up_items(%GameState{players: players, map: %GameMap{items: items} = gamemap} = state) do
@@ -249,5 +251,34 @@ defmodule ProugeServer.Game do
       end
 
     %{game_state | state: state, map: %{map | items: items}, players: players}
+  end
+
+  defp discover_rooms(
+         %GameState{players: players, map: %GameMap{rooms: rooms} = map} = game_state
+       ) do
+    rooms =
+      Enum.reduce(players, rooms, fn %Player{x: x, y: y, pid: pid}, rooms_acc ->
+        GameMap.try_discover_rooms(rooms_acc, x, y, pid)
+      end)
+
+    %{game_state | map: %{map | rooms: rooms}}
+  end
+
+  defp discover_tunnels(
+         %GameState{
+           players: players,
+           map: %GameMap{h_tunnels: h_tunnels, v_tunnels: v_tunnels} = map
+         } = game_state
+       ) do
+
+    h_tunnels = Enum.reduce(players, h_tunnels, fn %Player{x: x, y: y, pid: pid}, tunnels_acc ->
+        GameMap.try_discover_tunnels(tunnels_acc, x, y, pid)
+      end)
+
+    v_tunnels = Enum.reduce(players, v_tunnels, fn %Player{x: x, y: y, pid: pid}, tunnels_acc ->
+      GameMap.try_discover_tunnels(tunnels_acc, x, y, pid)
+    end)
+
+    %{game_state | map: %{map | h_tunnels: h_tunnels, v_tunnels: v_tunnels}}
   end
 end
