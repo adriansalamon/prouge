@@ -11,6 +11,11 @@ defmodule ProugeServer.TCPServer do
   def start_link(port) do
     Logger.info("Starting TCP server, running on pid #{inspect(self())}...")
 
+    port = case port do
+      p when is_integer(p) -> p
+      p when is_binary(p) -> String.to_integer(p)
+    end
+
     Task.start_link(__MODULE__, :accept, [port])
   end
 

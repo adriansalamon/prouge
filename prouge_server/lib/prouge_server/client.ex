@@ -39,7 +39,7 @@ defmodule ProugeServer.Client do
 
     # Game logic for hadnling the message/command
     case Game.handle_command(pid, decoded) do
-      :moved -> Game.send_game_state()
+      :updated -> Game.send_game_state()
       _ -> nil
     end
 

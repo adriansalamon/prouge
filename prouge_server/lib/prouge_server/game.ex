@@ -121,7 +121,7 @@ defmodule ProugeServer.Game do
       ) do
     # Try to move players and update state
     state = state |> try_move_players(player_id, direction) |> update_state()
-    {:reply, :moved, state}
+    {:reply, :updated, state}
   end
 
   # If game state is :not_started or :finished, a player cant move

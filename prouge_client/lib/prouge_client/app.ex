@@ -19,7 +19,11 @@ defmodule ProugeClient.App do
     # Adds the ratatoulle app pid to the tcp client so that it can send messages to it
     TCPClient.register_app_pid(self())
     # Connect to the game server
-    TCPClient.connect('localhost', 6969)
+
+    host = System.get_env("PROUGE_HOST", "localhost") |> String.to_charlist()
+    port = System.get_env("PROUGE_PORT", "3000") |> String.to_integer()
+
+    TCPClient.connect(host, port)
 
     # Initial ratatoulle model
     %{
