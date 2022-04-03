@@ -25,7 +25,7 @@ defmodule ProugeClient.App do
 
     TCPClient.connect(host, port)
 
-    # Initial ratatoulle model
+    # Initial ratatouille model
     %{
       game_state: %GameState{},
       height: window.height - 2,
