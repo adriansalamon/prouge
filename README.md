@@ -52,9 +52,9 @@ The application uses TCP sockets. Each message is prefixed with 4 bytes containi
 
 ### Game state
 
-The server sends only one type of data: the gamestate. A gamestate JSON object looks like the following:
+The server sends only one type of data: the gamestate. A gamestate JSON object looks like the following (comments are added for clarity and is not valid JSON):
 
-```json
+```js
 {
   "players": [
     // x and y coordinates of each player
