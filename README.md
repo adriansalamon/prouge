@@ -1,6 +1,6 @@
 # Prouge
 
-A simple networked rougelike with server and client written in Elixir. Contains `prouge_client` and `prouge_server`. To run the game, you will need to have one server instance running and connect any number of clients.
+A simple networked rougelike with server and client written in Elixir. Contains `prouge_client` and `prouge_server`. To run the game, you will need to have one server instance running and connect any number of clients. This was created by me (asalamon@kth.se) and Klara Sandström (klarasan@kth.se) as part of the KTH course DD1362 - Programming Paradigms (progp), where we were tasked with implementing a multiplayer game using network sockets. 
 
 ![](images/Screenshot.png)
 
